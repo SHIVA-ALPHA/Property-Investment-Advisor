@@ -237,7 +237,7 @@ with col2:
 
 st.divider()
 st.subheader("🤖 AI Recommendation")
-st.write(response.content)
+st.write(response.content[-1]['text'])
 
 #=================================================================== Footer============================================================
 st.divider()

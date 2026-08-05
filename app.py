@@ -1,13 +1,11 @@
-
+#================================================================Modules Loading======================================================
 import streamlit as st
-import plotly.graph_objects as go
 
+import plotly.graph_objects as go
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-# -------------------------------------------------
-# Page Configuration
-# -------------------------------------------------
+# =======================================================================Page Configuration===================================================
 
 st.set_page_config(
     page_title="AI Property Investment Advisor",
@@ -15,13 +13,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# -------------------------------------------------
-# Custom CSS
-# -------------------------------------------------
+#================================================= Custom CSS=========================================
 
 st.markdown("""
 <style>
-
 .main-title{
     text-align:center;
     color:#1E88E5;
@@ -38,9 +33,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------------------------------------
-# Heading
-# -------------------------------------------------
+#================================================== Heading================================================
 
 st.markdown(
     "<p class='main-title'>🏡 AI Property Investment Advisor</p>",
@@ -51,12 +44,9 @@ st.markdown(
     "<p class='sub-title'>Budget & City Based Investment Recommendation using LangChain + Gemini</p>",
     unsafe_allow_html=True
 )
-
 st.divider()
 
-# -------------------------------------------------
-# Sidebar
-# -------------------------------------------------
+#================================================ Sidebar========================================================
 
 with st.sidebar:
     st.header("🔑 Gemini API")

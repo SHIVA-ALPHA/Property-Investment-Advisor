@@ -1,0 +1,9 @@
+streamlit
+langchain
+langchain-core
+langchain-google-genai
+google-generativeai
+plotly
+pandas
+reportlab
+python-dotenv

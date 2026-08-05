@@ -59,42 +59,32 @@ st.divider()
 # -------------------------------------------------
 
 with st.sidebar:
-
     st.header("🔑 Gemini API")
-
     api_key = st.text_input(
         "Enter Gemini API Key",
         type="password"
     )
-
     st.divider()
-
     st.markdown("### About")
-
     st.info("""
-This AI tool recommends
-property investments based on
-
-• Budget
-
-• Preferred City
-
-• Property Type
-
-• Investment Goal
-
-using Google Gemini.
-""")
+          This AI tool recommends
+        property investments based on
+            • Budget
+            • Preferred City
+            • Property Type
+            • Investment Goal
+        using Google Gemini.
+    """)
 
 #======================================================== User Inputs====================================================
 
 col1, col2 = st.columns(2)
 with col1:
     budget = st.number_input(
-        "💰 Budget (₹)",
-        min_value=100000,
-        value=5000000,
-        step=100000
+                            "💰 Budget (₹)",
+                                        min_value=100000,
+                                            value=5000000,
+                                                step=100000
     )
 
     city = st.selectbox(
@@ -105,7 +95,6 @@ with col1:
               "Ahmedabad", "Kolkata"
         ])
 with col2:
-
     property_type = st.selectbox(
         "🏢 Property Type",
         [
@@ -151,13 +140,13 @@ llm = ChatGoogleGenerativeAI(
 # -------------------------------------------------
 
 def calculate_score(budget, city):
-  score = 50
-  premium_cities = [
+    score = 50
+    premium_cities = [
         "Delhi",
         "Mumbai",
         "Bangalore",
-        "Hyderabad"
-    ]
+        "Hyderabad"]
+    
     if city in premium_cities:
         score += 25
     else:

@@ -1,11 +1,22 @@
 #================================================================Modules Loading======================================================
 import streamlit as st
+import random
+import io
+from datetime import datetime
 
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+from reportlab.lib.units import cm
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+)
 
 # =======================================================================Page Configuration===================================================
 
@@ -19,17 +30,40 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+
+/* -------- Property-themed background (shown on every load/deploy) -------- */
+.stApp{
+    background:
+        linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.90)),
+        url("https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1950&q=80");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}
+
+/* Give the main content cards a soft translucent panel so text stays readable
+   over the background image */
+section.main > div.block-container{
+    background: rgba(255,255,255,0.55);
+    border-radius: 16px;
+    padding: 1.5rem 2rem;
+}
+
 .main-title{
     text-align:center;
     color:#1E88E5;
-    font-size:42px;
-    font-weight:bold;
+    font-size:56px;
+    font-weight:800;
+    letter-spacing:1px;
+    text-shadow: 1px 2px 6px rgba(0,0,0,0.15);
+    margin-bottom:0;
 }
 
 .sub-title{
     text-align:center;
-    color:gray;
-    font-size:18px;
+    color:#444;
+    font-size:19px;
+    margin-top:4px;
 }
 
 </style>
@@ -46,6 +80,16 @@ st.markdown(
     "<p class='sub-title'>Budget & City Based Investment Recommendation using LangChain + Gemini</p>",
     unsafe_allow_html=True
 )
+
+st.markdown("""
+> **ℹ️ What you can tell the advisor:** your **budget**, a **primary city**, a **second
+> city to compare it against** (pick it yourself or let the app auto-select one that
+> refreshes every run), the **property type** you're eyeing, and your **investment goal**.
+> An area-wise outlook for both cities appears immediately below — no need to click
+> anything. Click **🚀 Analyze Investment** further down only when you want the full
+> AI-generated recommendation and investment score.
+""")
+
 st.divider()
 
 #================================================ Sidebar========================================================
@@ -209,6 +253,107 @@ def extract_text(response):
     return str(content) if content else "Sorry, I couldn't generate a response. Please try again."
 
 
+def _df_to_table(df, col_widths=None):
+    """Convert a pandas DataFrame (area report) into a styled reportlab Table."""
+    data = [list(df.columns)] + df.values.tolist()
+    table = Table(data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E88E5")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f5f7fa")]),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    return table
+
+
+def build_pdf_report(ctx, score, recommendation_text, city, city2, area_df, area_df2):
+    """Build the full investment report as a PDF and return it as bytes,
+    ready for st.download_button."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        leftMargin=2 * cm, rightMargin=2 * cm,
+        topMargin=1.8 * cm, bottomMargin=1.8 * cm
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "ReportTitle", parent=styles["Title"], textColor=colors.HexColor("#1E88E5"), fontSize=22
+    )
+    heading_style = ParagraphStyle(
+        "ReportHeading", parent=styles["Heading2"], textColor=colors.HexColor("#1E88E5"),
+        spaceBefore=14, spaceAfter=6
+    )
+    body_style = ParagraphStyle("ReportBody", parent=styles["Normal"], fontSize=10, leading=15)
+
+    story = []
+
+    story.append(Paragraph("🏡 AI Property Investment Advisor", title_style))
+    story.append(Paragraph("Investment Report", styles["Heading3"]))
+    story.append(Paragraph(datetime.now().strftime("Generated on %d %b %Y, %I:%M %p"), body_style))
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph("Your Inputs", heading_style))
+    input_rows = [
+        ["Budget", f"Rs. {ctx['budget']:,}"],
+        ["Preferred City", ctx["city"]],
+        ["Comparison City", city2],
+        ["Property Type", ctx["property_type"]],
+        ["Investment Goal", ctx["goal"]],
+        ["Investment Score", f"{score}/100"],
+    ]
+    input_table = Table(input_rows, colWidths=[5 * cm, 9 * cm])
+    input_table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cccccc")),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#eef4fc")),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(input_table)
+
+    story.append(Paragraph(f"Area-Wise Outlook — {city}", heading_style))
+    if not area_df.empty:
+        story.append(_df_to_table(area_df.drop(columns=["_color"]),
+                                   col_widths=[4.5 * cm, 3.5 * cm, 3.5 * cm, 4 * cm]))
+    else:
+        story.append(Paragraph("No area-level data available.", body_style))
+
+    story.append(Paragraph(f"Area-Wise Outlook — {city2}", heading_style))
+    if not area_df2.empty:
+        story.append(_df_to_table(area_df2.drop(columns=["_color"]),
+                                   col_widths=[4.5 * cm, 3.5 * cm, 3.5 * cm, 4 * cm]))
+    else:
+        story.append(Paragraph("No area-level data available.", body_style))
+
+    story.append(PageBreak())
+    story.append(Paragraph("AI Recommendation", heading_style))
+    for para in recommendation_text.split("\n"):
+        if para.strip():
+            story.append(Paragraph(para.strip(), body_style))
+            story.append(Spacer(1, 6))
+
+    story.append(Spacer(1, 20))
+    story.append(Paragraph(
+        "Note: Appreciation and rental yield figures are indicative, illustrative estimates "
+        "for demonstration purposes, not live market data.",
+        ParagraphStyle("Disclaimer", parent=styles["Normal"], fontSize=8, textColor=colors.grey)
+    ))
+    story.append(Paragraph(
+        "Developed using Streamlit, LangChain and Google Gemini.",
+        ParagraphStyle("Footer", parent=styles["Normal"], fontSize=8, textColor=colors.grey)
+    ))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 #======================================================== User Inputs====================================================
 
 col1, col2 = st.columns(2)
@@ -243,31 +388,53 @@ with col2:
             "Self Use"
         ])
 
+#================================================ Comparison City Selection ========================================================
+
+st.markdown("#### 🔀 Compare Against a Second City")
+cmp_col1, cmp_col2 = st.columns([1, 2])
+
+with cmp_col1:
+    auto_pick = st.checkbox("🎲 Auto-select comparison city", value=True,
+                             help="Picks a random other city; changes every time the app runs.")
+
+other_cities = [c for c in CITIES if c != city]
+
+with cmp_col2:
+    if auto_pick:
+        # Re-rolled on every script run (i.e. every time the app is opened/rerun),
+        # not cached in session_state, so it changes each run as requested.
+        city2 = random.choice(other_cities)
+        st.info(f"Auto-selected comparison city: **{city2}**")
+    else:
+        city2 = st.selectbox("🏙 Comparison City", other_cities)
+
 st.divider()
 analyze = st.button(
     "🚀 Analyze Investment",
     use_container_width=True)
 
-#======================================================== Area-Wise Report (always visible) ==============================
+#======================================================== Area-Wise Report (always visible, two-city comparison) ==============================
 
-st.subheader(f"📍 Area-Wise Outlook — {city}")
-st.caption("Indicative estimates for demonstration purposes, not live market data.")
+st.subheader(f"📍 Area-Wise Outlook — {city} vs {city2}")
+st.caption("Indicative estimates for demonstration purposes, not live market data. "
+           "Shown automatically as soon as you pick your cities — no need to click Analyze.")
 
-area_df = build_area_report(city)
 
-if not area_df.empty:
-    rep_col1, rep_col2 = st.columns([1, 1])
-
-    with rep_col1:
+def render_city_report(target_city, container):
+    """Render the area table + bar chart for one city inside the given column."""
+    df = build_area_report(target_city)
+    with container:
+        st.markdown(f"**{target_city}**")
+        if df.empty:
+            st.warning("No area-level data available for this city yet.")
+            return df
         st.dataframe(
-            area_df.drop(columns=["_color"]),
+            df.drop(columns=["_color"]),
             use_container_width=True,
             hide_index=True
         )
-
-    with rep_col2:
         bar_fig = px.bar(
-            area_df,
+            df,
             x="Area",
             y="Appreciation (%/yr)",
             color="Outlook",
@@ -276,18 +443,36 @@ if not area_df.empty:
                 "Moderate / Stable": "#f9a825",
                 "Loss Risk / Weak Growth": "#c62828"
             },
-            title=f"{city}: Area-Wise Appreciation Outlook"
+            title=f"{target_city}: Area-Wise Appreciation"
         )
-        bar_fig.update_layout(height=350)
+        bar_fig.update_layout(height=320, showlegend=False)
         st.plotly_chart(bar_fig, use_container_width=True)
+    return df
 
-    best_area = area_df.sort_values("Appreciation (%/yr)", ascending=False).iloc[0]
-    worst_area = area_df.sort_values("Appreciation (%/yr)", ascending=True).iloc[0]
-    m1, m2 = st.columns(2)
-    m1.success(f"🌟 Most Profitable Area: **{best_area['Area']}** ({best_area['Appreciation (%/yr)']}%/yr appreciation)")
-    m2.error(f"⚠️ Weakest Area: **{worst_area['Area']}** ({worst_area['Appreciation (%/yr)']}%/yr appreciation)")
+rep_col1, rep_col2 = st.columns(2)
+area_df = render_city_report(city, rep_col1)
+area_df2 = render_city_report(city2, rep_col2)
+
+if not area_df.empty and not area_df2.empty:
+    avg_appr_1 = area_df["Appreciation (%/yr)"].mean()
+    avg_yield_1 = area_df["Rental Yield (%)"].mean()
+    avg_appr_2 = area_df2["Appreciation (%/yr)"].mean()
+    avg_yield_2 = area_df2["Rental Yield (%)"].mean()
+
+    st.markdown("#### ⚖️ City vs City — Average Outlook")
+    cmp_fig = go.Figure(data=[
+        go.Bar(name="Avg Appreciation (%/yr)", x=[city, city2], y=[avg_appr_1, avg_appr_2],
+               marker_color="#1E88E5"),
+        go.Bar(name="Avg Rental Yield (%)", x=[city, city2], y=[avg_yield_1, avg_yield_2],
+               marker_color="#43A047"),
+    ])
+    cmp_fig.update_layout(barmode="group", height=350)
+    st.plotly_chart(cmp_fig, use_container_width=True)
+
+    leader = city if (avg_appr_1 * 1.5 + avg_yield_1 * 2) >= (avg_appr_2 * 1.5 + avg_yield_2 * 2) else city2
+    st.success(f"🌟 Based on average area appreciation & rental yield, **{leader}** currently looks like the stronger pick between the two.")
 else:
-    st.warning("No area-level data available for this city yet.")
+    st.warning("No area-level data available for one or both cities yet.")
 
 st.divider()
 
@@ -349,10 +534,14 @@ if analyze:
 
     score = calculate_score(budget, city)
 
-    with st.spinner("Analyzing Property Investment..."):
+    with st.status("🤖 AI Agent is running...", expanded=True) as agent_status:
+        st.write("📋 Preparing your investment profile...")
+        st.write("🧠 Calling Gemini AI model — analyzing budget, city & goal...")
         response = chain.invoke({"budget": budget, "city": city,
                                         "property_type": property_type, "goal": goal, "score": score
         })
+        st.write("📝 Formatting your recommendation...")
+        agent_status.update(label="✅ Analysis complete", state="complete", expanded=False)
 
     # Persist results across reruns (e.g. when the chatbot triggers a rerun)
     st.session_state["analyzed"] = True
@@ -418,6 +607,26 @@ with col2:
 st.divider()
 st.subheader("🤖 AI Recommendation")
 st.write(recommendation_text)
+
+#=========================================================== PDF Report Download=========================================================
+
+pdf_bytes = build_pdf_report(
+    ctx=ctx,
+    score=score,
+    recommendation_text=recommendation_text,
+    city=city,
+    city2=city2,
+    area_df=area_df,
+    area_df2=area_df2,
+)
+
+st.download_button(
+    label="📄 Download Report as PDF",
+    data=pdf_bytes,
+    file_name=f"Property_Investment_Report_{ctx['city']}_vs_{city2}.pdf",
+    mime="application/pdf",
+    use_container_width=True,
+)
 
 # Save context so the chatbot below can reference the latest analysis
 st.session_state["last_context"] = {
@@ -497,7 +706,7 @@ else:
         )
 
         with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
+            with st.spinner("🤖 Your AI Assistant is thinking..."):
                 try:
                     bot_response = chatbot_chain.invoke({
                         "context": context_str,

@@ -180,6 +180,35 @@ def build_area_report(city):
     return pd.DataFrame(rows)
 
 
+def extract_text(response):
+    """
+    Safely pull plain text out of a LangChain / Gemini response, regardless of
+    whether .content comes back as a plain string or a list of content blocks.
+    Never raises — falls back to a stringified response so the UI always shows
+    *something* instead of silently failing.
+    """
+    content = getattr(response, "content", response)
+
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                # common shapes: {"type": "text", "text": "..."} or {"text": "..."}
+                text_val = block.get("text")
+                if text_val:
+                    parts.append(text_val)
+            elif isinstance(block, str):
+                parts.append(block)
+        if parts:
+            return "\n".join(parts)
+
+    # Last-resort fallback so the user always sees a response
+    return str(content) if content else "Sorry, I couldn't generate a response. Please try again."
+
+
 #======================================================== User Inputs====================================================
 
 col1, col2 = st.columns(2)
@@ -262,23 +291,6 @@ else:
 
 st.divider()
 
-# ============================================Stop if button not clicked=========================================================
-
-if not analyze:
-    st.stop()
-
-if not api_key:
-    st.warning("Please enter your Gemini API Key.")
-    st.stop()
-
-#===================================== Gemini Model===========================================================
-
-llm = ChatGoogleGenerativeAI(
-    model="gemini-3.5-flash-lite",
-    google_api_key=api_key,
-    temperature=0.3
-)
-
 # -------------------------------------------------
 # Investment Score Logic
 # -------------------------------------------------
@@ -297,10 +309,6 @@ def calculate_score(budget, city):
     else:
         score += 5
     return min(score, 100)
-
-# ================================Calculate Score=====================================
-
-score = calculate_score(budget, city)
 
 #================================================== Prompt Template===================================
 
@@ -321,18 +329,49 @@ Based on these details provide:
 Keep the answer professional and within 250 words.
 """)
 
+# ============================================Stop if never analyzed yet=========================================================
 
+if analyze:
+    if not api_key:
+        st.warning("Please enter your Gemini API Key.")
+        st.stop()
 
-# =================================================LangChain Runnable Chain=================================
+    #===================================== Gemini Model===========================================================
 
-chain = prompt | llm
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-3.5-flash-lite",
+        google_api_key=api_key,
+        temperature=0.3
+    )
 
-#============================================= Generate AI Response=========================================
+    # =================================================LangChain Runnable Chain=================================
+    chain = prompt | llm
 
-with st.spinner("Analyzing Property Investment..."):
-  response = chain.invoke({"budget": budget, "city": city,
-                                    "property_type": property_type, "goal": goal, "score": score
-    })
+    score = calculate_score(budget, city)
+
+    with st.spinner("Analyzing Property Investment..."):
+        response = chain.invoke({"budget": budget, "city": city,
+                                        "property_type": property_type, "goal": goal, "score": score
+        })
+
+    # Persist results across reruns (e.g. when the chatbot triggers a rerun)
+    st.session_state["analyzed"] = True
+    st.session_state["last_score"] = score
+    st.session_state["last_recommendation"] = extract_text(response)
+    st.session_state["last_context"] = {
+        "budget": budget,
+        "city": city,
+        "property_type": property_type,
+        "goal": goal,
+        "score": score
+    }
+
+if not st.session_state.get("analyzed", False):
+    st.info("👆 Fill in your details above and click **Analyze Investment** to generate your report.")
+    st.stop()
+
+score = st.session_state["last_score"]
+recommendation_text = st.session_state["last_recommendation"]
 
 # ========================Display Investment Score==============================================
 
@@ -364,19 +403,21 @@ else:
 
 #========================================================User Summary=====================================================
 
+ctx = st.session_state["last_context"]
+
 col1, col2 = st.columns(2)
 with col1:
-  st.info(f"💰 Budget : ₹{budget:,}")
-  st.info(f"🏙 City : {city}")
+  st.info(f"💰 Budget : ₹{ctx['budget']:,}")
+  st.info(f"🏙 City : {ctx['city']}")
 with col2:
-  st.info(f"🏢 Property : {property_type}")
-  st.info(f"🎯 Goal : {goal}")
+  st.info(f"🏢 Property : {ctx['property_type']}")
+  st.info(f"🎯 Goal : {ctx['goal']}")
   
 #=========================================================== AI Recommendation=========================================================
 
 st.divider()
 st.subheader("🤖 AI Recommendation")
-st.write(response.content[-1]['text'])
+st.write(recommendation_text)
 
 # Save context so the chatbot below can reference the latest analysis
 st.session_state["last_context"] = {
@@ -401,13 +442,14 @@ CHATBOT_SYSTEM_PROMPT = PromptTemplate.from_template("""
 You are a helpful, professional Real Estate & Property Investment Assistant embedded
 inside an "AI Property Investment Advisor" app.
 
-Only answer questions related to: real estate, property investment, budgeting for
-property purchase, cities/areas for investment, rental yield, appreciation, home loans,
-property types, and the user's current analysis context below.
+Your main focus is: real estate, property investment, budgeting for property purchase,
+cities/areas for investment, rental yield, appreciation, home loans, property types, and
+the user's current analysis context below. Answer these fully and helpfully.
 
-If the user asks something unrelated to real estate or personal property investment,
-politely decline and steer them back to property-related topics. Do not answer questions
-outside this domain (e.g. general trivia, coding help, unrelated topics).
+If the user asks something outside this focus, still try to give a genuinely useful,
+honest answer using your general knowledge. If you are unsure or don't know the answer,
+simply say so plainly (e.g. "I'm not sure about that") instead of refusing to engage.
+Do not lecture the user about staying on topic — just answer or say you don't know.
 
 Current analysis context (may be empty if no analysis has been run yet):
 {context}
@@ -462,7 +504,7 @@ else:
                         "history": history_str,
                         "question": user_question
                     })
-                    answer_text = bot_response.content[-1]['text'] if isinstance(bot_response.content, list) else bot_response.content
+                    answer_text = extract_text(bot_response)
                     st.write(answer_text)
                     st.session_state.chat_history.append(("assistant", answer_text))
                 except Exception as e:

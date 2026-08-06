@@ -31,37 +31,51 @@ st.set_page_config(
 st.markdown("""
 <style>
 
-/* -------- Property-themed background (shown on every load/deploy) -------- */
+/* -------- Dark, property-themed background (shown on every load/deploy) -------- */
 .stApp{
     background:
-        linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.90)),
-        url("https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1950&q=80");
+        linear-gradient(rgba(8,10,18,0.82), rgba(8,10,18,0.88)),
+        url("https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=1950&q=80");
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
 }
 
-/* Give the main content cards a soft translucent panel so text stays readable
+/* Give the main content a dark translucent panel so text stays readable
    over the background image */
 section.main > div.block-container{
-    background: rgba(255,255,255,0.55);
+    background: rgba(18,20,30,0.72);
+    border: 1px solid rgba(255,255,255,0.08);
     border-radius: 16px;
     padding: 1.5rem 2rem;
 }
 
+/* Light, readable text for the general markdown/body content on the dark panel */
+section.main > div.block-container p,
+section.main > div.block-container li,
+section.main > div.block-container span,
+section.main > div.block-container label,
+section.main div[data-testid="stMarkdownContainer"] {
+    color: #e8eaf0 !important;
+}
+
+section.main h1, section.main h2, section.main h3, section.main h4 {
+    color: #f0f3fa !important;
+}
+
 .main-title{
     text-align:center;
-    color:#1E88E5;
+    color:#4FC3F7;
     font-size:56px;
     font-weight:800;
     letter-spacing:1px;
-    text-shadow: 1px 2px 6px rgba(0,0,0,0.15);
+    text-shadow: 1px 3px 10px rgba(0,0,0,0.55);
     margin-bottom:0;
 }
 
 .sub-title{
     text-align:center;
-    color:#444;
+    color:#b0bec5;
     font-size:19px;
     margin-top:4px;
 }

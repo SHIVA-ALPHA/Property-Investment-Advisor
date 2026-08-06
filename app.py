@@ -35,7 +35,7 @@ st.markdown("""
 .stApp{
     background:
         linear-gradient(rgba(255,255,255,0.88), rgba(255,255,255,0.90)),
-        url("https://t4.ftcdn.net/jpg/00/90/75/91/360_F_90759175_mgrvFtX2ILUc7pw7eKziYEeFskckGdut.jpg");
+        url("https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1950&q=80");
     background-size: cover;
     background-position: center;
     background-attachment: fixed;

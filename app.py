@@ -85,7 +85,7 @@ section.main h1, section.main h2, section.main h3, section.main h4 {
 
 #================================================== Heading================================================
 
-st.title('🏡 AI Property Investment Advisor')
+st.title('🏡 AI Property Investment Advisor', text_alignment='center')
 
 st.markdown(
     "<p class='sub-title'>Budget & City Based Investment Recommendation using LangChain + Gemini</p>",

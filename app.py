@@ -85,10 +85,7 @@ section.main h1, section.main h2, section.main h3, section.main h4 {
 
 #================================================== Heading================================================
 
-st.markdown(
-    "<p class='main-title'>🏡 AI Property Investment Advisor</p>",
-    unsafe_allow_html=True
-)
+st.title('🏡 AI Property Investment Advisor')
 
 st.markdown(
     "<p class='sub-title'>Budget & City Based Investment Recommendation using LangChain + Gemini</p>",

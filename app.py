@@ -66,7 +66,7 @@ section.main h1, section.main h2, section.main h3, section.main h4 {
 .main-title{
     text-align:center;
     color:#4FC3F7;
-    font-size:89px;
+    font-size:200px;
     font-weight:800;
     letter-spacing:1px;
     text-shadow: 1px 3px 10px rgba(0,0,0,0.55);
